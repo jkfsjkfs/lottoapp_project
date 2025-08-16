@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { ActivityIndicator } from 'react-native';
+import { apiGet, apiPost } from './src/api/client';
 
 
 const Stack = createNativeStackNavigator();
@@ -29,7 +30,7 @@ function NumeroScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Ingresa el número de la rifa</Text>
+      <Text style={styles.label}>Ingresar Número</Text>
       <TextInput
         style={styles.input}
         keyboardType="number-pad"
@@ -49,44 +50,34 @@ function DatosScreen({ route, navigation }) {
   const [telefono, setTelefono] = useState('');
   const [cargando, setCargando] = useState(false);
 
-  const handleRegistrar = async () => {
-    if (!nombre || !telefono) {
-      Alert.alert('Campos requeridos', 'Por favor completa todos los campos.');
+const handleRegistrar = async () => {
+  if (!nombre || !telefono) {
+    Alert.alert('Campos requeridos', 'Por favor completa todos los campos.');
+    return;
+  }
+
+  setCargando(true);
+  try {
+    // 1) Consultar si el número ya existe
+    const yaExiste = await apiGet(`/api/registros/${numero}`);
+    const ocupado = false; //Array.isArray(yaExiste) && yaExiste.length > 0;
+
+    if (ocupado) {
+      setCargando(false);
+      Alert.alert('Número en uso', `El número ${numero} ya está registrado.`);
       return;
     }
 
-    setCargando(true);
+    // 2) Registrar
+    await apiPost('/api/registros', { numero, nombre, telefono });
 
-    try {
-      // Validar si el número ya fue registrado
-      const check = await fetch(`http://192.168.1.122:3001/api/registros/${numero}`);
-      const yaExiste = await check.json();
-
-      if (yaExiste && yaExiste.numero) {
-        setCargando(false);
-        Alert.alert('Número en uso Intente de nuevo', `El número ${numero} ya está registrado.`);
-        return;
-      }
-
-      // Registrar nuevo número
-      const res = await fetch('http://192.168.1.122:3001/api/registros', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero, nombre, telefono })
-      });
-
-      setCargando(false);
-
-      if (res.ok) {
-        navigation.navigate('Confirmacion', { numero, nombre });
-      } else {
-        Alert.alert('Error', 'No se pudo registrar. Intenta de nuevo.');
-      }
-    } catch (err) {
-      setCargando(false);
-      Alert.alert('Error de conexión', 'No se pudo conectar al servidor.');
-    }
-  };
+    setCargando(false);
+    navigation.navigate('Confirmacion', { numero, nombre });
+  } catch (err) {
+    setCargando(false);
+    Alert.alert('Error', err?.message || 'No se pudo registrar.');
+  }
+};
 
   return (
     <View style={styles.container}>

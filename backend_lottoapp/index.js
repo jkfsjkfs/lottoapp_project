@@ -2,7 +2,7 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const basicAuth = require('express-basic-auth');
-const jwt = require('jsonwebtoken');
+//const jwt = require('jsonwebtoken');
 
 require('dotenv').config();
 const express = require('express');
@@ -86,14 +86,15 @@ if (!isProd) {
         version: '1.0.0',
         description: 'API para gestionar registros de la rifa/lotto',
       },
-      servers: [{ url: baseUrl, description: isProd ? 'Prod' : 'Local/Dev' }],
+      servers: [{ url: baseUrl, description: 'Local/Dev' }],
       components: {
         securitySchemes: {
-          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+          // 👇 Solo apiKey por header
           appKeyHeader: { type: 'apiKey', in: 'header', name: 'x-app-key' },
         },
       },
-      security: [{ bearerAuth: [] }, { appKeyHeader: [] }],
+      // 👇 Seguridad global: solo x-app-key
+      security: [{ appKeyHeader: [] }],
     },
     apis: ['./index.js'],
   });
@@ -104,13 +105,15 @@ if (!isProd) {
     challenge: true,
   });
 
-  app.use('/docs',
-    allowLocalOnly,          // ← solo localhost (dev)
-    docsAuth,                // ← además con Basic Auth
+  app.use(
+    '/docs',
+    allowLocalOnly,   // solo localhost
+    docsAuth,         // basic auth adicional
     swaggerUi.serve,
     swaggerUi.setup(swaggerSpec)
   );
 }
+
 
 // Home
 app.get('/', (req, res) => {
@@ -121,9 +124,8 @@ app.get('/', (req, res) => {
 });
 
 // ======= Auth =======
-
 /**
- * @openapi
+ * openapi
  * /auth/login:
  *   post:
  *     summary: Autenticación de usuario para obtener un JWT
@@ -149,6 +151,7 @@ app.get('/', (req, res) => {
  *                 token: { type: string, example: "eyJhbGciOi..." }
  *       401: { description: Credenciales inválidas }
  */
+/*
 app.post('/auth/login', (req, res) => {
   const { user, pass } = req.body;
   const VALID_USER = process.env.API_USER || 'rifa';
@@ -160,8 +163,10 @@ app.post('/auth/login', (req, res) => {
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
   res.json({ token });
 });
+*/
 
 // Middleware JWT
+/*
 function authJWT(req, res, next) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
@@ -173,6 +178,7 @@ function authJWT(req, res, next) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }
+  */
 
 // Middleware x-app-key (opcional)
 function appKeyGuard(req, res, next) {
@@ -191,7 +197,7 @@ function appKeyGuard(req, res, next) {
  *   post:
  *     summary: Crea un registro de número de rifa
  *     tags: [Registros]
- *     security: [ { bearerAuth: [] }, { appKeyHeader: [] } ]
+ *     security: [ { appKeyHeader: [] } ]
  *     requestBody:
  *       required: true
  *       content:
@@ -209,7 +215,7 @@ function appKeyGuard(req, res, next) {
  *       401: { description: No autorizado }
  *       500: { description: Error en el servidor }
  */
-app.post('/api/registros', authJWT, appKeyGuard, async (req, res) => {
+app.post('/api/registros', appKeyGuard, async (req, res) => {
   const { numero, nombre, telefono } = req.body;
   if (!numero || !nombre || !telefono) {
     return res.status(400).json({ error: 'Datos incompletos' });
@@ -235,7 +241,7 @@ app.post('/api/registros', authJWT, appKeyGuard, async (req, res) => {
  *   get:
  *     summary: Obtiene un registro por número
  *     tags: [Registros]
- *     security: [ { bearerAuth: [] }, { appKeyHeader: [] } ]
+ *     security: [ { appKeyHeader: [] } ]
  *     parameters:
  *       - in: path
  *         name: numero
@@ -262,7 +268,7 @@ app.post('/api/registros', authJWT, appKeyGuard, async (req, res) => {
  *       401: { description: No autorizado }
  *       500: { description: Error en el servidor }
  */
-app.get('/api/registros/:numero', authJWT, appKeyGuard, async (req, res) => {
+app.get('/api/registros/:numero', appKeyGuard, async (req, res) => {
   const { numero } = req.params;
   try {
     const connection = await mysql.createConnection(dbConfig);
@@ -276,6 +282,7 @@ app.get('/api/registros/:numero', authJWT, appKeyGuard, async (req, res) => {
     res.status(500).json({ error: 'Error al consultar el número' });
   }
 });
+
 
 // Arranque
 app.listen(port, () => {
