@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend-rifa",
-    "slug": "frontend-rifa",
+    "name": "frontend_lottoapp",
+    "slug": "frontend_lottoapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

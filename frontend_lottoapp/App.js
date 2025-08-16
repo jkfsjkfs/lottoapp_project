@@ -10,7 +10,7 @@ const Stack = createNativeStackNavigator();
 function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>RIFA COLEGIAL</Text>
+      <Text style={styles.title}>LOTTO COLEGIAL</Text>
       <Button title="Comenzar" onPress={() => navigation.navigate('Numero')} />
     </View>
   );
@@ -128,7 +128,6 @@ function ConfirmacionScreen({ route, navigation }) {
 }
 
 
-
 export default function App() {
   return (
     <NavigationContainer>
@@ -141,6 +140,10 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
+
+
+
 
 const styles = StyleSheet.create({
   container: {
