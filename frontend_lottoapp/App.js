@@ -59,15 +59,15 @@ const handleRegistrar = async () => {
   setCargando(true);
   try {
     // 1) Consultar si el número ya existe
-    const yaExiste = await apiGet(`/api/registros/${numero}`);
-    const ocupado = false; //Array.isArray(yaExiste) && yaExiste.length > 0;
+    /*const yaExiste = await apiGet(`/api/registros/${numero}`);
+    const ocupado = Array.isArray(yaExiste) && yaExiste.length > 0;
 
     if (ocupado) {
       setCargando(false);
       Alert.alert('Número en uso', `El número ${numero} ya está registrado.`);
       return;
     }
-
+    */
     // 2) Registrar
     await apiPost('/api/registros', { numero, nombre, telefono });
 
