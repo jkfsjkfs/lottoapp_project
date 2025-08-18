@@ -2,7 +2,7 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const basicAuth = require('express-basic-auth');
-//const jwt = require('jsonwebtoken');
+// const jwt = require('jsonwebtoken');
 
 require('dotenv').config();
 const express = require('express');
@@ -51,8 +51,6 @@ const apiLimiter = rateLimit({
 });
 app.use(['/api', '/auth'], apiLimiter);
 
-
-
 // === SOLO LOCALHOST para Swagger (en desarrollo) ===
 function allowLocalOnly(req, res, next) {
   const ip = req.ip || req.connection?.remoteAddress || '';
@@ -69,10 +67,43 @@ function allowLocalOnly(req, res, next) {
 const dbConfig = {
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASSWORD, // OJO: tu .env usa DB_PASSWORD
   database: process.env.DB_NAME,
   // ssl: { rejectUnauthorized: true }, // ← descomenta si tu proveedor de DB lo requiere
 };
+
+// Pool para mejor performance
+const pool = mysql.createPool({
+  ...dbConfig,
+  waitForConnections: true,
+  connectionLimit: 10,
+  enableKeepAlive: true,
+});
+
+// Helpers
+function bitToBool(val) {
+  if (val === null || val === undefined) return false;
+  if (Buffer.isBuffer(val)) return val[0] === 1;
+  if (typeof val === 'number') return val === 1;
+  if (typeof val === 'boolean') return val;
+  return String(val) === '1';
+}
+
+let bcrypt;
+try { bcrypt = require('bcryptjs'); } catch { bcrypt = null; }
+const allowPlain = String(process.env.PLAIN_ALLOWED || '').toLowerCase() === 'true';
+
+async function verifyPassword(inputPassword, stored) {
+  // 1) bcrypt si hay hash
+  if (bcrypt && stored && typeof stored === 'string' && stored.startsWith('$2')) {
+    try {
+      return await bcrypt.compare(inputPassword, stored);
+    } catch { /* ignore */ }
+  }
+  // 2) fallback en claro si está habilitado
+  if (allowPlain) return inputPassword === stored;
+  return false;
+}
 
 // Swagger Spec (solo se construye si NO estás en producción)
 let swaggerSpec;
@@ -93,7 +124,7 @@ if (!isProd) {
           appKeyHeader: { type: 'apiKey', in: 'header', name: 'x-app-key' },
         },
       },
-      // 👇 Seguridad global: solo x-app-key
+      // 👇 Seguridad global: solo x-app-key en /api/* (no para /auth)
       security: [{ appKeyHeader: [] }],
     },
     apis: ['./index.js'],
@@ -114,7 +145,6 @@ if (!isProd) {
   );
 }
 
-
 // Home
 app.get('/', (req, res) => {
   if (!isProd) {
@@ -123,12 +153,12 @@ app.get('/', (req, res) => {
   res.send('Lotto API');
 });
 
-// ======= Auth =======
+// ======= Auth (contra tabla usuario) =======
 /**
- * openapi
+ * @openapi
  * /auth/login:
  *   post:
- *     summary: Autenticación de usuario para obtener un JWT
+ *     summary: Autenticación de usuario 
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -136,51 +166,68 @@ app.get('/', (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [user, pass]
+ *             required: [login, password]
  *             properties:
- *               user: { type: string, example: "rifa" }
- *               pass: { type: string, example: "123456" }
+ *               login: { type: string, example: "rifa" }
+ *               password: { type: string, example: "123456" }
  *     responses:
  *       200:
- *         description: Token generado
+ *         description: Usuario autenticado
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 token: { type: string, example: "eyJhbGciOi..." }
- *       401: { description: Credenciales inválidas }
+ *                 idusuario: { type: integer }
+ *                 idperfil: { type: integer }
+ *                 nombre: { type: string }
+ *                 login: { type: string }
+ *       401: { description: Credenciales inválidas o usuario inactivo }
+ *       400: { description: Faltan credenciales }
  */
-/*
-app.post('/auth/login', (req, res) => {
-  const { user, pass } = req.body;
-  const VALID_USER = process.env.API_USER || 'rifa';
-  const VALID_PASS = process.env.API_PASS || '123456';
-  if (user !== VALID_USER || pass !== VALID_PASS) {
-    return res.status(401).json({ error: 'Credenciales inválidas' });
-  }
-  const payload = { sub: user, role: 'app' };
-  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token });
-});
-*/
-
-// Middleware JWT
-/*
-function authJWT(req, res, next) {
-  const h = req.headers.authorization || '';
-  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Token requerido' });
+app.post('/auth/login', async (req, res) => {
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Token inválido o expirado' });
-  }
-}
-  */
+    const { login, password } = req.body || {};
+    if (!login || !password) {
+      return res.status(400).json({ message: 'Faltan credenciales' });
+    }
 
-// Middleware x-app-key (opcional)
+    const [rows] = await pool.query(
+      `SELECT idusuario, idperfil, nombre, login, password, activo
+         FROM usuario
+        WHERE login = ?
+        LIMIT 1`,
+      [login]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
+
+    const row = rows[0];
+    if (!bitToBool(row.activo)) {
+      return res.status(401).json({ message: 'Usuario inactivo' });
+    }
+
+    const ok = await verifyPassword(password, row.password || '');
+    if (!ok) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
+
+    // Éxito: devolvemos perfil mínimo para frontend
+    return res.json({
+      idusuario: row.idusuario,
+      idperfil: row.idperfil,
+      nombre: row.nombre,
+      login: row.login,
+    });
+  } catch (err) {
+    console.error('auth/login error', err);
+    return res.status(500).json({ message: 'Error interno' });
+  }
+});
+
+// Middleware x-app-key (opcional) — solo para /api/*
 function appKeyGuard(req, res, next) {
   const key = req.headers['x-app-key'];
   if (!key || key !== process.env.APP_KEY) {
@@ -222,13 +269,19 @@ app.post('/api/registros', appKeyGuard, async (req, res) => {
   }
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      'INSERT INTO registros (numero, nombre, telefono) VALUES (?, ?, ?)',
-      [numero, nombre, telefono]
-    );
-    await connection.end();
-    res.status(200).json({ message: 'Registro exitoso' });
+    const conn = await pool.getConnection();
+    try {
+      await conn.execute(
+        // NOTA: tu BD dump usa tabla `registro` (singular). Aquí mantengo `registros` porque así estaba tu código.
+        // Si tu tabla real es `registro`, cambia a:
+        // 'INSERT INTO registro (numero, nombre, telefono) VALUES (?, ?, ?)'
+        'INSERT INTO registros (numero, nombre, telefono) VALUES (?, ?, ?)',
+        [numero, nombre, telefono]
+      );
+      res.status(200).json({ message: 'Registro exitoso' });
+    } finally {
+      conn.release();
+    }
   } catch (error) {
     console.error('Error al guardar registro:', error);
     res.status(500).json({ error: 'Error en el servidor' });
@@ -271,18 +324,19 @@ app.post('/api/registros', appKeyGuard, async (req, res) => {
 app.get('/api/registros/:numero', appKeyGuard, async (req, res) => {
   const { numero } = req.params;
   try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute('SELECT * FROM registros WHERE numero = ?', [numero]);
-    await connection.end();
-
-    if (rows.length > 0) res.json(rows);
-    else res.json(null);
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.execute('SELECT * FROM registros WHERE numero = ?', [numero]);
+      if (rows.length > 0) res.json(rows);
+      else res.json(null);
+    } finally {
+      conn.release();
+    }
   } catch (error) {
     console.error('Error al verificar número:', error);
     res.status(500).json({ error: 'Error al consultar el número' });
   }
 });
-
 
 // Arranque
 app.listen(port, () => {

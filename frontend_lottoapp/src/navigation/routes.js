@@ -1,4 +1,5 @@
 export const ROUTES = {
+  LOGIN: 'Login',
   HOME: 'Home',
   NUMERO: 'Numero',
   DATOS: 'Datos',
