@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, Button, Alert, TextInput } from 'react-native';
 import styles from '../theme/styles';
 import { isNumeroValido } from '../services/validation/numeroRules';
+import { AppLabelInput, AppButton } from '../components/UI/AppControl';
 
 export default function NumeroScreen({ navigation }) {
   const [numero, setNumero] = useState('');
@@ -17,7 +18,7 @@ export default function NumeroScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Ingresar Número</Text>
+      <AppLabelInput title='Ingresar Número:' />
       <TextInput
         style={styles.input}
         keyboardType="number-pad"
@@ -25,7 +26,7 @@ export default function NumeroScreen({ navigation }) {
         onChangeText={setNumero}
         maxLength={4}
       />
-      <Button title="Continuar" onPress={handleContinue} />
+      <AppButton title="Continuar" onPress={handleContinue} />
     </View>
   );
 }

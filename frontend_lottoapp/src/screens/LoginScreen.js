@@ -1,74 +1,59 @@
-import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, Button, Alert, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, Image, StyleSheet, Alert } from 'react-native';
+import { useAuthStore } from '../store/authStore';
 import styles from '../theme/styles';
-import { AuthContext } from '../app/AppProvider';
-import { loginUsuario } from '../services/api/authService';
-import useAuth from '../hooks/useAuth';
-
-
-
-
+import { AppButton } from '../components/UI/AppControl';
 
 export default function LoginScreen() {
-const { user, loading } = useAuth();
-console.log('CTX:', { user, loading });
-}
-
-/*
-export default function LoginScreenA() {
-
-  const { login } = useContext(AuthContext);
-  const [loginText, setLoginText] = useState('');
+  const loginFn = useAuthStore((s) => s.login);
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [cargando, setCargando] = useState(false);
 
-  
-
-  const onSubmit = async () => {
-    if (!loginText || !password) {
-      Alert.alert('Campos requeridos', 'Ingresa usuario y contraseña.');
-      return;
-    }
-    setCargando(true);
+  const handleLogin = async () => {
     try {
-      await login(loginText, password, loginUsuario);
-    } catch (e) {
-      Alert.alert('Error', e?.message || 'No fue posible iniciar sesión.');
-    } finally {
-      setCargando(false);
+      await loginFn(login, password);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'No se pudo iniciar sesión');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Iniciar sesión</Text>
-
-      <Text style={styles.label}>Usuario</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        value={loginText}
-        onChangeText={setLoginText}
-        placeholder="tu_usuario"
+    <View style={styleLogin.container}>
+      <Image 
+        source={require('../../assets/logo.png')}
+        style={styles.logo}
+        resizeMode="contain"
       />
 
-      <Text style={styles.label}>Contraseña</Text>
+      <Text style={styles.title}>Iniciar Sesión</Text>
+
       <TextInput
         style={styles.input}
-        secureTextEntry
+        placeholder="Usuario"
+        value={login}
+        onChangeText={setLogin}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Contraseña"
         value={password}
         onChangeText={setPassword}
-        placeholder="••••••••"
+        secureTextEntry
       />
 
-      {cargando ? (
-        <ActivityIndicator size="large" />
-      ) : (
-        <Button title="Entrar" onPress={onSubmit} />
-      )}
+      
+      <AppButton title="Entrar" onPress={handleLogin}/>
+      
     </View>
   );
 }
 
-
-*/
+const styleLogin = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',      // centra horizontal
+    backgroundColor: '#fff',
+    padding: 20
+    
+  }
+});

@@ -94,14 +94,17 @@ try { bcrypt = require('bcryptjs'); } catch { bcrypt = null; }
 const allowPlain = String(process.env.PLAIN_ALLOWED || '').toLowerCase() === 'true';
 
 async function verifyPassword(inputPassword, stored) {
+  
   // 1) bcrypt si hay hash
   if (bcrypt && stored && typeof stored === 'string' && stored.startsWith('$2')) {
     try {
       return await bcrypt.compare(inputPassword, stored);
     } catch { /* ignore */ }
   }
+  
   // 2) fallback en claro si está habilitado
   if (allowPlain) return inputPassword === stored;
+  
   return false;
 }
 
@@ -153,6 +156,20 @@ app.get('/', (req, res) => {
   res.send('Lotto API');
 });
 
+
+// Middleware x-app-key (opcional) — solo para /api/*
+function appKeyGuard(req, res, next) {
+
+  const key = req.headers['x-app-key'];
+  
+  if (!key || key !== process.env.APP_KEY) {
+    return res.status(401).json({ error: 'x-app-key inválida' });
+  }
+  
+  next();
+}
+
+
 // ======= Auth (contra tabla usuario) =======
 /**
  * @openapi
@@ -185,7 +202,7 @@ app.get('/', (req, res) => {
  *       401: { description: Credenciales inválidas o usuario inactivo }
  *       400: { description: Faltan credenciales }
  */
-app.post('/auth/login', async (req, res) => {
+app.post('/auth/login', appKeyGuard, async (req, res) => {
   try {
     const { login, password } = req.body || {};
     if (!login || !password) {
@@ -210,9 +227,11 @@ app.post('/auth/login', async (req, res) => {
     }
 
     const ok = await verifyPassword(password, row.password || '');
+    
     if (!ok) {
-      return res.status(401).json({ message: 'Credenciales inválidas' });
+      return res.status(401).json({ message: 'Credenciales NO válidas' });
     }
+    
 
     // Éxito: devolvemos perfil mínimo para frontend
     return res.json({
@@ -221,20 +240,12 @@ app.post('/auth/login', async (req, res) => {
       nombre: row.nombre,
       login: row.login,
     });
+    
   } catch (err) {
     console.error('auth/login error', err);
     return res.status(500).json({ message: 'Error interno' });
   }
 });
-
-// Middleware x-app-key (opcional) — solo para /api/*
-function appKeyGuard(req, res, next) {
-  const key = req.headers['x-app-key'];
-  if (!key || key !== process.env.APP_KEY) {
-    return res.status(401).json({ error: 'x-app-key inválida' });
-  }
-  next();
-}
 
 // ======= Rutas API =======
 

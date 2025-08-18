@@ -13,25 +13,39 @@ function keyHeaders(extra) {
   };
 }
 
+
+async function handleResponse(r, method, path) {
+  let data;
+  try {
+    data = await r.json(); // intenta parsear JSON
+  } catch {
+    const txt = await r.text();
+    data = { message: txt };
+  }
+
+  if (!r.ok) {
+    if (r.status === 401) {
+      throw new Error(data.message || "No autorizado (x-app-key)");
+    }
+    throw new Error(data.message || `Error ${method} ${path}`);
+  }
+
+  return data;
+}
+
 export async function apiGet(path) {
   const r = await fetch(`${BASE}${path}`, { headers: keyHeaders() });
-  if (r.status === 401) throw new Error('No autorizado (x-app-key)');
-  if (!r.ok) throw new Error(`Error GET ${path}`);
-  return r.json();
+  return handleResponse(r, "GET", path);
 }
 
 export async function apiPost(path, body) {
   const r = await fetch(`${BASE}${path}`, {
-    method: 'POST',
+    method: "POST",
     headers: keyHeaders(),
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
-  if (r.status === 401) throw new Error('No autorizado (x-app-key)');
-  if (!r.ok) {
-    const msg = await r.text().catch(() => 'Error POST');
-    throw new Error(msg || 'Error POST');
-  }
-  return r.json();
+  return handleResponse(r, "POST", path);
 }
+
 
 export { BASE as API_BASE_URL };
