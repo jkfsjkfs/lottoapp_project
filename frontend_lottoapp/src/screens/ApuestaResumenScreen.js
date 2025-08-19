@@ -5,8 +5,14 @@ import { apiPost } from '../api/client';
 import AppLogo from '../components/UI/AppLogo'
 import {AppButton} from '../components/UI/AppControl';
 
+import { enviarSMS, enviarWhatsApp } from '../services/messaging';
+
+import { useAuthStore } from '../store/authStore';
+
 export default function ApuestaResumenScreen({ route, navigation }) {
   const { loterias, apuestas } = route.params;
+
+  const user = useAuthStore((s) => s.user);
 
   // Datos comprador
   const [nombre, setNombre] = useState('');
@@ -29,13 +35,72 @@ export default function ApuestaResumenScreen({ route, navigation }) {
       return;
     }
 
-    try {
-      await apiPost('/api/apuestas', { loterias, apuestas, total, comprador: { nombre, telefono } });
-      Alert.alert('✅ Éxito', 'Apuesta registrada correctamente');
-      navigation.popToTop();
-    } catch (err) {
-      Alert.alert('❌ Error', err.message);
-    }
+    if (nombre.length < 5) {
+      Alert.alert('Datos incompletos', 'El nombre es demasiado corto.');
+      return;
+    }    
+
+    if (telefono.length < 10) {
+      Alert.alert('Datos incompletos', 'Por favor ingresa un telefono válido.');
+      return;
+    }    
+
+    const idusuario = user?.idusuario;
+    const hoy = new Date();
+      
+
+    const mensaje = `Hola ${nombre}, tu apuesta fue registrada. 
+        \nFecha:  ${hoy.toLocaleString()} 
+        \nVendedor: ${idusuario}
+        \nNúmeros: ${apuestas.map(a => a.numero).join(', ')}
+        \nTotal: $${formatCurrency(total)}`;
+
+   Alert.alert(
+      "Confirmar Apuesta",
+      `Cliente: ${nombre}\nTeléfono: ${telefono}\nTotal: $${formatCurrency(total)}`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            try {
+              await apiPost('/api/apuestas', { idusuario, nombre, telefono, loterias, apuestas });
+              
+              Alert.alert(
+                  "✅ Éxito",
+                  `Apuesta registrada correctamente. ¿Desea enviar Mensaje ?`,
+                  [
+                    {
+                      text: "Cancelar",
+                      style: "cancel",
+                      onPress: () => console.log("El usuario canceló")
+                    },
+                    {
+                      text: "Enviar SMS",
+                      onPress: () => {
+                        enviarSMS(telefono, mensaje);
+                      }
+                    }, 
+                    {
+                      text: "Enviar Whatsapp",
+                      onPress: () => {
+                        enviarWhatsApp(telefono, mensaje);
+                      }
+                    }
+                  ],
+                  { cancelable: false }
+                );
+              
+                navigation.popToTop();
+
+            } catch (err) {
+              Alert.alert('❌ Error', err.message);
+            }
+          }
+        }
+      ]  
+    );
+
   };
 
   return (

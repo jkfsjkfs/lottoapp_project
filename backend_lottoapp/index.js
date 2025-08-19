@@ -214,7 +214,7 @@ app.post('/auth/login', appKeyGuard, async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT idusuario, idperfil, nombre, login, password, activo
+      `SELECT idusuario, idperfil, nombre, login, password, activo, comision
          FROM usuario
         WHERE login = ?
         LIMIT 1`,
@@ -392,6 +392,207 @@ app.get('/api/loterias', appKeyGuard, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/apuestas:
+ *   post:
+ *     summary: Registra una apuesta con cabecera y detalles
+ *     tags: [Apuestas]
+ *     security: [ { appKeyHeader: [] } ]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idusuario, nombre, telefono, loterias, apuestas]
+ *             properties:
+ *               idusuario: { type: integer, example: 5 }
+ *               nombre: { type: string, example: "Carlos Pérez" }
+ *               telefono: { type: string, example: "3001234567" }
+ *               loterias:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     idloteria: { type: integer }
+ *                     descrip: { type: string }
+ *               apuestas:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     numero: { type: string }
+ *                     valor: { type: number }
+ *     responses:
+ *       200: { description: Apuesta registrada con éxito }
+ *       400: { description: Datos incompletos }
+ *       500: { description: Error en el servidor }
+ */
+app.post('/api/apuestas', appKeyGuard, async (req, res) => {
+  const { idusuario, nombre, telefono, loterias, apuestas } = req.body;
+
+  if (!idusuario || !nombre || !telefono || !Array.isArray(loterias) || !Array.isArray(apuestas)) {
+    return res.status(400).json({ error: 'Datos incompletos' });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1) Insertar cabecera
+    const [result] = await conn.execute(
+      'INSERT INTO registro (idusuario, nombre, telefono) VALUES (?, ?, ?)',
+      [idusuario, nombre, telefono]
+    );
+    const idregistro = result.insertId;
+
+    // 2) Insertar detalles (cruce apuestas × loterías)
+    for (const ap of apuestas) {
+      for (const lot of loterias) {
+        await conn.execute(
+          'INSERT INTO detalle (idregistro, numero, idloteria, valor) VALUES (?, ?, ?, ?)',
+          [idregistro, ap.numero, lot.idloteria, ap.valor]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.status(200).json({ message: 'Apuesta registrada correctamente', idregistro });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Error al registrar apuesta:', error);
+    res.status(500).json({ error: 'Error al registrar apuesta' });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * @openapi
+ * /api/ventas/resumen:
+ *   get:
+ *     summary: Obtiene resumen de ventas del usuario para una fecha
+ *     tags: [Ventas]
+ *     security: [ { appKeyHeader: [] } ]
+ *     parameters:
+ *       - in: query
+ *         name: idusuario
+ *         required: true
+ *         schema: { type: integer }
+ *         description: ID del usuario logueado
+ *       - in: query
+ *         name: fecha
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: Fecha en formato YYYY-MM-DD
+ *     responses:
+ *       200:
+ *         description: Resumen de ventas y comisiones
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ventasTotales: { type: number }
+ *                 comisiones: { type: number }
+ */
+app.get('/api/ventas/resumen', appKeyGuard, async (req, res) => {
+  const { idusuario, fecha } = req.query;
+  if (!idusuario || !fecha) {
+    return res.status(400).json({ error: 'Faltan parámetros idusuario o fecha' });
+  }
+
+  try {
+    const conn = await pool.getConnection();
+    try {
+      // Traer comision del usuario
+      const [userRows] = await conn.execute(
+        'SELECT comision FROM usuario WHERE idusuario = ?',
+        [idusuario]
+      );
+      if (userRows.length === 0) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+      const porcentaje = userRows[0].comision || 0;
+
+      // Sumar todas las apuestas del día para el usuario
+      const [rows] = await conn.execute(
+        `SELECT SUM(d.valor) as total
+           FROM registro r
+           JOIN detalle d ON r.id = d.idregistro
+          WHERE r.idusuario = ? 
+            AND DATE(r.fecha) = ?`,
+        [idusuario, fecha]
+      );
+
+      const ventasTotales = rows[0].total || 0;
+      const comisiones = ventasTotales * (porcentaje / 100);
+
+      res.json({ ventasTotales, comisiones });
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('Error en /api/ventas/resumen:', err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+/**
+ * @openapi
+ * /api/ventas/ultima:
+ *   get:
+ *     summary: Última venta del usuario
+ *     tags: [Ventas]
+ *     security: [ { appKeyHeader: [] } ]
+ *     parameters:
+ *       - in: query
+ *         name: idusuario
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Última venta con sus detalles
+ */
+app.get('/api/ventas/ultima', appKeyGuard, async (req, res) => {
+  const { idusuario } = req.query;
+  if (!idusuario) return res.status(400).json({ error: 'Falta idusuario' });
+
+  try {
+    const conn = await pool.getConnection();
+    try {
+      // Trae el registro más reciente
+      const [registros] = await conn.execute(
+        `SELECT * FROM registro WHERE idusuario = ? ORDER BY fecha DESC LIMIT 1`,
+        [idusuario]
+      );
+
+      if (registros.length === 0) return res.json(null);
+
+      const registro = registros[0];
+
+      // Trae los detalles asociados
+      const [detalles] = await conn.execute(
+        `SELECT d.numero, d.valor, l.descrip as loteria
+           FROM detalle d
+           JOIN loteria l ON l.idloteria = d.idloteria
+          WHERE d.idregistro = ?`,
+        [registro.id]
+      );
+
+      res.json({
+        registro,
+        detalles,
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('Error al consultar última venta:', err);
+    res.status(500).json({ error: 'Error al consultar última venta' });
+  }
+});
 
 
 // Arranque

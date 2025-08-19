@@ -1,18 +1,51 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, {  useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppLogo from '../components/UI/AppLogo';
+import { apiGet } from '../api/client';
+import { useAuthStore } from '../store/authStore';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
+
 
 export default function HomeVendedorScreen({ navigation }) {
   // TODO: estos valores vendrán del backend
-  const ventasTotales = 120000;
-  const comisiones = 15000;
+
+  const user = useAuthStore((s) => s.user);
+  const [loading, setLoading] = useState(true);
+  const [ventasTotales, setVentas] = useState(0);
+  const [comisiones, setComisiones] = useState(0);
+  const [currentDate, setFecha] = useState('');
+  
+  
+  const fetchResumen = async () => {
+    try {
+      const hoy = new Date();
+      setFecha(hoy);
+    const data = await apiGet(`/api/ventas/resumen?idusuario=${user.idusuario}&fecha=${hoy.toISOString().split('T')[0]}`);
+      setVentas(data.ventasTotales);
+      setComisiones(data.comisiones);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔄 cada vez que el screen tiene focus → refresca
+  useFocusEffect(
+    useCallback(() => {
+      fetchResumen();
+    }, [user.idusuario])
+  );
+
+  if (loading) return <ActivityIndicator size="large" color="#0056b8" />;
 
   return (
     <View style={styles.container}>
     <AppLogo/>
-    <Text style={styles.title}>🎟️ Dashboard Vendedor</Text>
       {/* Resumen de ventas */}
+      <Text style={styles.title}>Fecha: {currentDate.toLocaleDateString('es-CO')}</Text>          
       <View style={styles.summaryCard}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Ventas Totales</Text>
@@ -42,6 +75,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f7fa',
     alignItems: 'center',
     padding: 20,
+  },
+  title:{
+    fontSize:24,
+    fontWeight:'bold',
   },
   summaryCard: {
     flexDirection: 'row',
