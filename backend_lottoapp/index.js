@@ -170,6 +170,10 @@ function appKeyGuard(req, res, next) {
 }
 
 
+
+
+
+
 // ======= Auth (contra tabla usuario) =======
 /**
  * @openapi
@@ -348,6 +352,47 @@ app.get('/api/registros/:numero', appKeyGuard, async (req, res) => {
     res.status(500).json({ error: 'Error al consultar el número' });
   }
 });
+
+/**
+ * @openapi
+ * /api/loterias:
+ *   get:
+ *     summary: Lista de loterías activas
+ *     tags: [Loterias]
+ *     security: [ { appKeyHeader: [] } ]
+ *     responses:
+ *       200:
+ *         description: Lista de loterías
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   idloteria: { type: integer }
+ *                   nombre: { type: string }
+ *       401: { description: No autorizado }
+ *       500: { description: Error en el servidor }
+ */
+app.get('/api/loterias', appKeyGuard, async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.execute(
+        'SELECT idloteria, descrip FROM loteria WHERE activa'
+      );
+      res.json(rows);
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Error al consultar loterías:', error);
+    res.status(500).json({ error: 'Error al obtener las loterías' });
+  }
+});
+
+
 
 // Arranque
 app.listen(port, () => {

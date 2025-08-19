@@ -17,9 +17,10 @@ import { PROFILES, getProfileName } from '../constants/profiles';
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
-import NumeroScreen from '../screens/NumeroScreen';
-import DatosScreen from '../screens/DatosScreen';
-import ConfirmacionScreen from '../screens/ConfirmacionScreen';
+
+import ApuestaLoteriaScreen from '../screens/ApuestaLoteriaScreen';
+import ApuestaNumerosScreen from '../screens/ApuestaNumerosScreen';
+import ApuestaResumenScreen from '../screens/ApuestaResumenScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,12 +32,16 @@ function AppStack() {
       })}
     >
       <Stack.Screen name={ROUTES.HOME} component={HomeScreen} />
-      <Stack.Screen name={ROUTES.NUMERO} component={NumeroScreen} />
-      <Stack.Screen name={ROUTES.DATOS} component={DatosScreen} />
-      <Stack.Screen name={ROUTES.CONFIRMACION} component={ConfirmacionScreen} />
       <Stack.Screen name={ROUTES.PERFIL} component={ProfileScreen} />
       <Stack.Screen name={ROUTES.REPORTES} component={ReportesScreen} />
       <Stack.Screen name={ROUTES.ULTIMAVENTA} component={UltimaVentaScreen} />
+      <Stack.Screen name={ROUTES.APUESTA} component={ApuestaLoteriaScreen} />
+      <Stack.Screen name={ROUTES.APUESTA_NUMEROS} component={ApuestaNumerosScreen} />
+      <Stack.Screen name={ROUTES.APUESTA_RESUMEN} component={ApuestaResumenScreen} />
+
+      
+      
+
     </Stack.Navigator>
   );
 }

@@ -8,6 +8,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 20
     
+    
   },
   title: {
     fontSize: 24,
@@ -16,7 +17,8 @@ const styles = StyleSheet.create({
     color: '#0056b8',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
     marginBottom: 15,
     color: '#333',
   },
@@ -29,6 +31,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingHorizontal: 10,
     backgroundColor: '#f9f9f9',
+   
   },
 
   inputlabel:{
@@ -38,7 +41,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 10,
-    width: '80%',
+    width: '90%',
     borderRadius: 8,
     overflow: 'hidden', // asegura que el botón siga el borderRadius
   },
@@ -46,11 +49,12 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     marginBottom: 20
+   
   },
   logoHome: {
     width: 100,
-    height: 100
-    
+    height: 100,
+    margin:0,
   },  
 
 header: {
@@ -111,7 +115,6 @@ menuText: {
     fontStyle: 'italic',
     color: '#888',
   },
-
   
   
 });

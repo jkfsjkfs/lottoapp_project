@@ -1,23 +1,28 @@
-import { View, Text, Button, Image } from 'react-native';
+import React from 'react';
+import { useAuthStore } from '../store/authStore';
+import { PROFILES } from '../constants/profiles';
+import { View, Image } from 'react-native';
 import styles from '../theme/styles';
+import HomeAdminScreen from './HomeAdminScreen';
+import HomePromotorScreen from './HomePromotorScreen';
+import HomeVendedorScreen from './HomeVendedorScreen';
 
-import { AppButton } from '../components/UI/AppControl';
+
 
 export default function HomeScreen({ navigation }) {
+  const user = useAuthStore((s) => s.user);
 
-  return (
-    <View style={styles.container}>
-      <Image 
-        source={require('../../assets/logo.png')}
-        style={styles.logoHome}
-        resizeMode="contain"
-      />
-
-      
-      <AppButton title="Comenzar" onPress={() => navigation.navigate('Numero')} />
-      
-
-   
-    </View>
-  );
+  if (!user) return null;
+ 
+    switch (user.idperfil) {
+      case PROFILES.ADMIN.id:
+        return <HomeAdminScreen navigation={navigation} />;
+      case PROFILES.PROMOTOR.id:
+        return <HomePromotorScreen navigation={navigation} />;
+      case PROFILES.VENDEDOR.id:
+        return <HomeVendedorScreen navigation={navigation} />;
+      default:
+        return <HomeVendedorScreen navigation={navigation} />; // fallback
+    }
+  
 }
